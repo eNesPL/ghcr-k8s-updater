@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ghcr-k8s-updater
+  namespace: ghcr-updater
+  labels:
+    app: ghcr-k8s-updater
+  annotations:
+    # Możesz ustawić na "true", jeśli updater ma również aktualizować sam siebie
+    ghcr-updater.io/self-update: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ghcr-k8s-updater
+  template:
+    metadata:
+      labels:
+        app: ghcr-k8s-updater
+    spec:
+      serviceAccountName: ghcr-k8s-updater
+      # Jeśli sam obraz ghcr-k8s-updater jest prywatny, odkomentuj i podaj swój imagePullSecret:
+      # imagePullSecrets:
+      #   - name: ghcr-secret
+      containers:
+        - name: updater
+          image: ghcr.io/enespl/ghcr-k8s-updater:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: WATCH_NAMESPACES
+              value: "*"
+            - name: EXCLUDE_NAMESPACES
+              value: "kube-system,kube-public,kube-node-lease,argocd"
+            - name: WATCH_KINDS
+              value: "deployments,statefulsets,daemonsets"
+            - name: GHCR_OWNER_FILTER
+              value: "enespl"
+            - name: ONLY_LATEST_TAG
+              value: "true"
+            - name: REQUIRE_ANNOTATION
+              value: "false"
+            - name: USE_IMAGE_PULL_SECRETS
+              value: "true"
+            - name: POLL_INTERVAL_SECONDS
+              value: "60"
+            - name: RESTART_COOLDOWN_SECONDS
+              value: "180"
+          envFrom:
+            - secretRef:
+                name: ghcr-updater-secret
+                optional: true
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ghcr-k8s-updater
+  namespace: ghcr-updater
+  labels:
+    app: ghcr-k8s-updater
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+  selector:
+    app: ghcr-k8s-updater

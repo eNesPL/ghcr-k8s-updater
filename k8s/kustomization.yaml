@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - rbac.yaml
+  - deployment.yaml
+  # Jeśli zarządzasz Secretami przez SealedSecrets / ExternalSecrets / ręcznie w klastrze,
+  # możesz pominąć secret.yaml w GitOps:
+  # - secret.yaml
